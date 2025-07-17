@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Product Table Fragment</title>
+
+</head>
+<body>
+
+<div th:fragment="productTable" id="productTable">
+    <table class="product-data-table">
+        <thead>
+        <tr>
+            <th>Product Title</th>
+            <th>Product Type</th>
+            <th>Variants</th>
+            <th>Price</th>
+            <th>Image</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="variant : ${products}">
+            <td th:text="${variant.product.title}">Product Title</td>
+            <td th:text="${variant.product.productType}">Product Type</td>
+            <td th:text="${variant.title}">Size (e.g. S, M, L)</td>
+            <td th:text="${variant.price}">0.00</td>
+            <td>
+                <img th:src="${variant.imageSrc}" alt="Product image" width="80"/>
+            </td>
+            <td>
+                <wa-button variant="danger" size="small"
+                           th:attrappend="hx-delete=@{/product-variants/{id}(id=${variant.id})}"
+                           hx-target="#productTable"
+                           hx-swap="outerHTML">
+                    Delete
+                </wa-button>
+                <wa-button variant="primary" size="small"
+                           th:data-id="${variant.id}" th:data-product-id="${variant.product.id}"
+                           class="edit-btn">
+                    Edit
+                </wa-button>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <nav style="margin-top: 1rem;">
+        <ul style="list-style: none; display: flex; gap: 0.5rem;">
+            <!-- First Page Button -->
+            <li th:if="${currentPage > 1}">
+                <a href="#"
+                   th:attr="hx-get=|/page/1?search=${search}|"
+                   hx-target="#productTable" hx-swap="outerHTML">First</a>
+            </li>
+
+            <!-- Previous Page Button -->
+            <li th:if="${currentPage > 1}">
+                <a href="#"
+                   th:attr="hx-get=|/page/${currentPage - 1}?search=${search}|"
+                   hx-target="#productTable" hx-swap="outerHTML">&laquo; Prev</a>
+            </li>
+
+            <!-- Page Number Links -->
+            <li th:each="i : ${pageNumbers}"
+                th:classappend="${i} == ${currentPage} ? 'active':''">
+                <a href="#"
+                   th:attr="hx-get=|/page/${i}?search=${search}|"
+                   hx-target="#productTable" hx-swap="outerHTML"
+                   th:text="${i}">Page</a>
+            </li>
+
+            <!-- Next Page Button -->
+            <li th:if="${currentPage < totalPages}">
+                <a href="#"
+                   th:attr="hx-get=|/page/${currentPage + 1}?search=${search}|"
+                   hx-target="#productTable" hx-swap="outerHTML">Next &raquo;</a>
+            </li>
+
+            <!-- Last Page Button -->
+            <li th:if="${currentPage < totalPages}">
+                <a href="#"
+                   th:attr="hx-get=|/page/${totalPages}?search=${search}|"
+                   hx-target="#productTable" hx-swap="outerHTML">Last</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div style="margin-top: 10px; font-size: 0.9em; color: #555;">
+        Total Items: <span th:text="${totalItems}"></span>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Products</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"></script>
+
+    <link rel="stylesheet" href="https://early.webawesome.com/webawesome@3.0.0-beta.2/dist/styles/webawesome.css" />
+    <script type="module" src="https://early.webawesome.com/webawesome@3.0.0-beta.2/dist/webawesome.loader.js"></script>
+
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header style="background-color: #f8f9fa; padding: 20px; border-bottom: 1px solid #e0e0e0; margin-bottom: 20px;">
+    <h1>Product Management</h1>
+    <nav>
+    </nav>
+</header>
+
+<main style="padding: 0 20px;">
+    <div th:replace="fragments/productForm :: productForm"></div>
+
+    <hr style="margin-top: 20px; margin-bottom: 20px;"/>
+
+    <wa-button id="loadButton" variant="brand"
+               hx-get="/page/1"
+               hx-target="#productTable" hx-swap="outerHTML"
+               hx-trigger="click">
+        Load Products
+    </wa-button>
+
+
+    <hr style="margin-top: 20px; margin-bottom: 20px;"/>
+
+    <!-- Search Bar -->
+    <div  class="search-container">
+        <!-- Shoelace Search Input -->
+        <wa-input
+                id="search"
+                name="search"
+                value=""
+                placeholder="Enter product title"
+                style="margin-right: 10px;">
+        </wa-input>
+
+        <!-- Shoelace Search Button -->
+        <wa-button
+                variant="brand"
+                onclick="submitSearch()">
+            Search
+        </wa-button>
+    </div>
+
+    <!-- product table -->
+    <div id="productTable">
+    </div>
+</main>
+
+<wa-dialog label="Edit Product Variant" id="edit-modal">
+    <form id="edit-form">
+        <label for="variant-title">Variant Title</label>
+        <input type="text" id="variant-title" name="title" required><br>
+
+        <label for="variant-price">Price</label>
+        <input type="number" id="variant-price" name="price" required><br>
+
+        <label for="variant-image">Image URL</label>
+        <input type="text" id="variant-image" name="imageSrc" required><br>
+
+        <input type="hidden" id="product-id" name="productId">
+        <input type="hidden" id="variant-id" name="variantId">
+
+        <wa-button type="submit" variant="brand">Update</wa-button>
+        <wa-button variant="neutral" slot="footer" id="cancel-edit-modal-btn">Cancel</wa-button>
+    </form>
+</wa-dialog>
+
+<script>
+    // --- HTMX Loading Indicator Logic (from your original file) ---
+    document.body.addEventListener('htmx:beforeRequest', function (event) {
+        const elt = event.target;
+        if (elt.tagName === 'wa-button' && (elt.id === 'loadButton' || elt.closest('nav ul'))) { // Add condition for pagination buttons if they are wa-buttons
+            elt.setAttribute('loading', 'true');
+        }
+    });
+
+    document.body.addEventListener('htmx:afterSwap', function (event) {
+        const elt = event.target;
+        if (elt.tagName === 'wa-button' && (elt.id === 'loadButton' || elt.closest('nav ul'))) {
+            elt.removeAttribute('loading');
+        }
+        // Crucial: Re-attach event listeners for edit buttons after HTMX swaps
+        // This ensures that when the #productTable content is updated,
+        // the new edit buttons also get their click handlers.
+        if (event.detail.target.id === 'productTable') {
+            console.log("htmx:afterSwap detected for #productTable, re-initializing edit button listeners.");
+            setupEditButtonListeners();
+        }
+    });
+
+    document.body.addEventListener('htmx:responseError', function (event) {
+        const elt = event.target;
+        if (elt.tagName === 'wa-button' && (elt.id === 'loadButton' || elt.closest('nav ul'))) {
+            elt.removeAttribute('loading');
+        }
+        alert('❌ Failed to load products or process request. Check console for details.');
+        console.error('HTMX Response Error:', event.detail);
+    });
+
+    // --- Edit Modal Functions and Listeners (from the previous fix) ---
+
+    // Function to handle opening the edit modal
+    function openEditModal(variantId, productId) {
+        console.log("Edit button clicked. Variant ID: ", variantId, "Product ID: ", productId);
+
+        fetch(`/products/${productId}/variants/${variantId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Fetched data: ", data);
+
+                document.getElementById('variant-title').value = data.title;
+                document.getElementById('variant-price').value = data.price;
+                document.getElementById('variant-image').value = data.imageSrc;
+                document.getElementById('product-id').value = productId;
+                document.getElementById('variant-id').value = variantId;
+
+                const modal = document.getElementById('edit-modal');
+                if (modal) {
+                    modal.show();
+                } else {
+                    console.error("Edit modal not found.");
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching variant data:', error);
+                alert('Error fetching variant data. Please try again.');
+            });
+    }
+
+    // Function to close the edit modal
+    function closeEditModal() {
+        const modal = document.getElementById('edit-modal');
+        if (modal) {
+            modal.hide();
+            // Clear form fields after closing for a cleaner experience
+            document.getElementById('edit-form').reset();
+        } else {
+            console.error("Edit modal not found.");
+        }
+    }
+
+    // Function to set up (or re-setup) event listeners for edit buttons
+    function setupEditButtonListeners() {
+        // Ensure the productTable exists before querying for edit buttons within it
+        const productTableElement = document.getElementById('productTable');
+        if (productTableElement) {
+            productTableElement.querySelectorAll('.edit-btn').forEach(button => {
+                // Remove existing listener to prevent duplicates after HTMX swaps
+                button.removeEventListener('click', handleEditButtonClick);
+                // Add the listener
+                button.addEventListener('click', handleEditButtonClick);
+            });
+        }
+    }
+
+    // Separate function for the click handler to easily remove/add it
+    function handleEditButtonClick() {
+        const variantId = this.getAttribute('data-id');
+        const productId = this.getAttribute('data-product-id');
+        openEditModal(variantId, productId);
+    }
+
+    // --- Initial setup on DOMContentLoaded and Form Submission ---
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM fully loaded and parsed. Initial setup for index.html.");
+
+        // Initial setup for edit buttons (if any are present on initial page load, though in this setup, they won't be until Load Products is clicked)
+        setupEditButtonListeners();
+
+        // Event listener for the form submission (only attached once)
+        const editForm = document.getElementById('edit-form');
+        if (editForm) {
+            editForm.addEventListener('submit', function (event) {
+                event.preventDefault(); // Prevent default form submission
+
+                const formData = new FormData(this);
+                const productId = formData.get('productId');
+                const variantId = formData.get('variantId');
+                const title = formData.get('title');
+                const price = formData.get('price');
+                const imageSrc = formData.get('imageSrc');
+
+                fetch(`/products/${productId}/variants/${variantId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        title: title,
+                        price: price,
+                        imageSrc: imageSrc
+                    }),
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            // If not successful, throw an error with more details
+                            // Attempt to parse JSON first if the backend sends structured errors
+                            return response.json().catch(() => response.text()) // Try JSON, fall back to text
+                                .then(errorBody => {
+                                    let errorMessage = `HTTP error! Status: ${response.status}`;
+                                    if (typeof errorBody === 'object' && errorBody !== null) {
+                                        // If the error body is a JSON object (like from MethodArgumentNotValidException)
+                                        errorMessage += `: ${JSON.stringify(errorBody)}`;
+                                    } else if (typeof errorBody === 'string') {
+                                        // If the error body is a plain string message
+                                        errorMessage += `: ${errorBody}`;
+                                    } else if (response.statusText) {
+                                        errorMessage += `: ${response.statusText}`;
+                                    }
+                                    throw new Error(errorMessage);
+                                });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        closeEditModal(); // Close the modal on success
+
+                        // Get the current page number from the pagination if available, otherwise default to 1
+                        // This assumes your productTable fragment sends currentPage in the context
+                        const currentPageElement = document.querySelector('#productTable nav ul li.active a');
+                        const currentPage = currentPageElement ? parseInt(currentPageElement.textContent) : 1;
+
+                        // Trigger an HTMX request to reload the current page of the product table
+                        // This ensures the table reflects the updated data without a full page reload.
+                        console.log("current page: ", currentPage);
+                        htmx.ajax('GET', `/page/${currentPage}`, { target: '#productTable', swap: 'outerHTML' });
+                    })
+                    .catch(error => {
+                        console.error('Frontend caught error:', error);
+                        alert(`Error: ${error.message || 'Unknown error'}. Check console for details.`);
+                    });
+            });
+        }
+
+        // Add event listener for the cancel button in the modal (only attached once)
+        const cancelBtn = document.getElementById('cancel-edit-modal-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', closeEditModal);
+        }
+
+        // You might want to automatically load products on page load, uncomment if desired
+        // document.getElementById('loadButton').click();
+    });
+
+    function submitSearch() {
+        var searchQuery = document.getElementById('search').value; // Get value from the input field
+        var url = "/products?search=" + encodeURIComponent(searchQuery);
+
+        // Reload the product list dynamically using HTMX
+        htmx.ajax('GET', url, { target: '#productTable', swap: 'outerHTML' });
+    }
+
+    document.getElementById('search').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            // Prevent the default form submission behavior (if applicable)
+            event.preventDefault();
+            // Trigger the same action as the button click
+            console.log('Enter key pressed in input!');
+            submitSearch();
+        }
+    });
+</script>
+
+
+</body>
+</html>

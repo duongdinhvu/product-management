@@ -1,0 +1,153 @@
+<div th:fragment="productForm">
+    <div id="form-container">
+        <form
+                id="productForm"
+                th:object="${productForm}"
+                hx-post="/products"
+                hx-swap="outerHTML"
+                hx-target="#form-container"
+                class="validity-styles"
+                novalidate>
+
+            <div th:if="${#fields.hasErrors()}" id="form-errors" style="color: red; margin-bottom: 10px;">
+                <p>Please fix the errors below.</p>
+            </div>
+
+            <wa-input id="productTitleSlInput"
+                      label="Product Title"
+                      required
+                      style="margin-bottom: 10px;"
+                      autocomplete="off">
+                <input type="hidden" th:field="*{title}" />
+            </wa-input>
+            <div th:if="${#fields.hasErrors('title')}" th:errors="*{title}" class="error-text"></div>
+
+            <wa-input id="productTypeSlInput"
+                      label="Product Type (e.g. Shorts)"
+                      required
+                      style="margin-bottom: 10px;"
+                      autocomplete="off">
+                <input type="hidden" th:field="*{productType}" />
+            </wa-input>
+            <div th:if="${#fields.hasErrors('productType')}" th:errors="*{productType}" class="error-text"></div>
+
+            <fieldset style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;">
+                <legend>Variants</legend>
+
+                <wa-input id="variantTitleSlInput"
+                          label="Variant Title (e.g. Black / S)"
+                          required
+                          autocomplete="off">
+                    <input type="hidden" th:field="*{variants[0].title}" />
+                </wa-input>
+                <div th:if="${#fields.hasErrors('variants[0].title')}" th:errors="*{variants[0].title}" class="error-text"></div>
+
+                <wa-input id="variantPriceSlInput"
+                          label="Price"
+                          type="number"
+                          step="0.01"
+                          required
+                          autocomplete="off">
+                    <input type="hidden" th:field="*{variants[0].price}" />
+                </wa-input>
+                <div th:if="${#fields.hasErrors('variants[0].price')}" th:errors="*{variants[0].price}" class="error-text"></div>
+
+                <wa-input id="variantImageUrlSlInput"
+                          label="Image URL"
+                          required
+                          autocomplete="off">
+                    <input type="hidden" th:field="*{variants[0].imageSrc}" />
+                </wa-input>
+                <div th:if="${#fields.hasErrors('variants[0].imageSrc')}" th:errors="*{variants[0].imageSrc}" class="error-text"></div>
+            </fieldset>
+
+            <wa-button type="submit"
+                       variant="success">
+                Add Product
+            </wa-button>
+        </form>
+
+    </div>
+
+
+    <script th:inline="javascript">
+        // Function to synchronize Shoelace <wa-input> with hidden input fields
+        // This function will be called on initial load and after HTMX swaps
+        function setupShoelaceSyncForForm() {
+            // Define pairs by their slId and the fieldName that th:field uses for the hidden input
+            const pairs = [
+                { slId: 'productTitleSlInput', fieldName: 'title' },
+                { slId: 'productTypeSlInput', fieldName: 'productType' },
+                { slId: 'variantTitleSlInput', fieldName: 'variants[0].title' },
+                { slId: 'variantPriceSlInput', fieldName: 'variants[0].price' },
+                { slId: 'variantImageUrlSlInput', fieldName: 'variants[0].imageSrc' }
+            ];
+
+            pairs.forEach(pair => {
+                const slInput = document.getElementById(pair.slId);
+                // Find the hidden input based on its name attribute (managed by th:field)
+                const hiddenInput = document.querySelector(`input[name='${pair.fieldName}']`);
+
+                if (slInput && hiddenInput) {
+                    // IMPORTANT FIX: Explicitly set the wa-input's value from the hidden input.
+                    // This ensures the Shoelace component's internal state is correctly initialized
+                    // when the form is re-rendered, especially after an error.
+                    slInput.value = hiddenInput.value;
+
+                    // Listen for changes on the wa-input and update the hidden input
+                    slInput.addEventListener('wa-input', () => {
+                        hiddenInput.value = slInput.value;
+                    });
+                    // Also listen for 'sl-change' for completeness, especially for number inputs
+                    slInput.addEventListener('sl-change', () => {
+                        hiddenInput.value = slInput.value;
+                    });
+                }
+            });
+        }
+
+        // Attach listeners on initial DOM load
+        window.addEventListener('load', () => {
+            setupShoelaceSyncForForm();
+            // This explicit setting is no longer strictly necessary if 'open' is removed from HTML
+            // but keeping it here as a safeguard or if you change your mind about initial HTML state.
+            const successMessageElement = document.getElementById('successMessage');
+            if (successMessageElement) {
+                successMessageElement.open = false; // Ensure it's closed on load
+            }
+        });
+
+        // HTMX event listener to re-attach listeners after content swap
+        // This is crucial because outerHTML swap replaces the entire #form-container
+        // including the script, so it needs to be re-executed.
+        document.body.addEventListener('htmx:afterSwap', (event) => {
+            // Check if the swapped target is our form container
+            if (event.detail.target && event.detail.target.id === 'form-container') {
+                setTimeout(setupShoelaceSyncForForm, 50); // Added a small delay
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function (event) {
+            const xhr = event.detail.xhr;
+            const target = event.detail.target;
+
+            // Check if the target is the form container, which gets swapped by HTMX
+            if (target && target.id === 'form-container') {
+                const response = xhr.response;
+                const formError = document.getElementById('form-errors');
+
+                // Check if the response does not contain form errors
+                if (xhr.status >= 200 && xhr.status < 300 && !formError) {
+
+                    // Refresh the product table
+                    const triggerBtn = document.getElementById('loadButton');
+                    if (triggerBtn) triggerBtn.click();
+                } else {
+                    console.log('Form submission failed. Skipping product table refresh.');
+                }
+            }
+        });
+
+    </script>
+
+</div>
